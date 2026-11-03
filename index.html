@@ -55,7 +55,7 @@ code, pre, .mono { font: 12.5px/20px ui-monospace, SFMono-Regular, Menlo, Consol
 .file.closed .body { display: none; }
 .note { padding: 8px 12px; color: var(--muted); font-size: 13px; }
 .run { border-top: 1px solid var(--line); }
-.run:first-child { border-top: 0; }
+.run:first-child, .run.cont { border-top: 0; }
 .crumb { position: sticky; top: 36px; z-index: 2; background: var(--crumb); border-bottom: 1px solid var(--line); padding: 2px 10px; font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; }
 .crumb .k { color: var(--muted); font-size: 11px; }
 .crumb .sig { flex-basis: 100%; white-space: pre; overflow: hidden; text-overflow: ellipsis; opacity: .8; }
@@ -191,28 +191,50 @@ function renderBody(f) {
       continue;
     }
     for (j = i; j < N && f.vis[j]; j++);
-    // breadcrumb: the declaration around the first change of this run
-    let k = i;
-    while (k < j && f.rows[k].t === ' ') k++;
-    const anchor = f.rows[k < j ? k : i], side = anchor.t === '-' ? 'old' : 'new', sym = symAt(f, anchor);
-    let crumb = '';
-    if (sym) {
-      const parts = sym.path.split(' › ');
-      const declShown = f.rows.slice(i, j).some((r) => rowLine(r, side) === sym.decl);
-      const partial = f.rows.some((r, x) => !f.vis[x] && rowLine(r, side) >= sym.start && rowLine(r, side) <= sym.end);
-      crumb = `<div class="crumb"><span class="k">${esc(sym.kind)}</span><span>${parts.slice(0, -1).map((p) => esc(p) + ' › ').join('')}<b>${esc(parts.at(-1))}</b></span>` +
-        (partial ? `<button data-whole="${side}:${sym.start}:${sym.end}">show whole ${esc(sym.kind)}</button>` : '') +
-        (declShown ? '' : `<code class="sig">${lineHtml(f[side], sym.decl)}</code>`) + '</div>';
-    } else if (f.ts) crumb = '<div class="crumb"><span class="k">module scope</span></div>';
-    html += `<div class="run">${crumb}`;
-    for (let x = i; x < j; x++) {
-      const r = f.rows[x], s = r.t === '-' ? 'old' : 'new', ln = rowLine(r, s);
-      html += `<div class="r ${r.t === '+' ? 'add' : r.t === '-' ? 'del' : ''}" data-side="${s}" data-line="${ln}" data-i="${x}">` +
-        `<span class="ln">${r.o ?? ''}</span><span class="ln">${r.n ?? ''}</span><code>${lineHtml(f[s], ln)}</code></div>`;
+    // one sticky breadcrumb per declaration: split the visible run where the code enters another symbol
+    // (blank lines and a parent's own lines between two methods stay with the previous one)
+    // Removed lines that are replaced by added lines follow the replacement's symbol, else a rewrite flips
+    // between the old and the new function every few rows. Pure deletions keep their own (removed) symbol.
+    const own = [];
+    for (let x = i; x < j; ) {
+      if (f.rows[x].t === ' ') { own.push({ sym: symAt(f, f.rows[x]), side: 'new' }); x++; continue; }
+      let e = x;
+      while (e < j && f.rows[e].t !== ' ') e++;
+      const plus = f.rows.slice(x, e).find((r) => r.t === '+');
+      for (; x < e; x++) {
+        const r = f.rows[x];
+        own.push(r.t === '-' && plus ? { sym: symAt(f, plus), side: 'new' } : { sym: symAt(f, r), side: r.t === '-' ? 'old' : 'new' });
+      }
     }
-    html += '</div>';
+    const segs = [];
+    own.forEach(({ sym, side }, k) => {
+      const cur = segs.at(-1);
+      const same = cur && (!sym || sym.path === cur.sym?.path || (cur.sym && cur.sym.path.startsWith(sym.path + ' › ')));
+      if (same) cur.end = i + k + 1;
+      else segs.push({ start: i + k, end: i + k + 1, sym, side });
+    });
+    segs.forEach((g, n) => { html += segment(f, g, n > 0); });
   }
   return html;
+}
+
+function segment(f, { start, end, sym, side }, cont) {
+  let crumb = '';
+  if (sym) {
+    const parts = sym.path.split(' › ');
+    const declShown = f.rows.slice(start, end).some((r) => rowLine(r, side) === sym.decl);
+    const partial = f.rows.some((r, x) => !f.vis[x] && rowLine(r, side) >= sym.start && rowLine(r, side) <= sym.end);
+    crumb = `<div class="crumb"><span class="k">${esc(sym.kind)}</span><span>${parts.slice(0, -1).map((p) => esc(p) + ' › ').join('')}<b>${esc(parts.at(-1))}</b></span>` +
+      (partial ? `<button data-whole="${side}:${sym.start}:${sym.end}">show whole ${esc(sym.kind)}</button>` : '') +
+      (declShown ? '' : `<code class="sig">${lineHtml(f[side], sym.decl)}</code>`) + '</div>';
+  } else if (f.ts) crumb = '<div class="crumb"><span class="k">module scope</span></div>';
+  let html = `<div class="run${cont ? ' cont' : ''}">${crumb}`;
+  for (let x = start; x < end; x++) {
+    const r = f.rows[x], s = r.t === '-' ? 'old' : 'new', ln = rowLine(r, s);
+    html += `<div class="r ${r.t === '+' ? 'add' : r.t === '-' ? 'del' : ''}" data-side="${s}" data-line="${ln}" data-i="${x}">` +
+      `<span class="ln">${r.o ?? ''}</span><span class="ln">${r.n ?? ''}</span><code>${lineHtml(f[s], ln)}</code></div>`;
+  }
+  return html + '</div>';
 }
 
 const rkey = (f) => `semreview:${R.repo}:${R.mergeBase}:${f.path}`;
