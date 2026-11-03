@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
   // Display order. A file goes to the first group whose globs match; `rest` takes everything else.
   groups: [
     { name: 'API surface & types', include: ['**/*.d.ts', '**/types.ts', '**/types/**', '**/index.ts', '**/*.graphql', '**/openapi*.{json,yaml,yml}', '**/*.proto'] },
-    { name: 'Docs, config & CI', include: ['**/*.md', '**/*.{yml,yaml,toml}', '**/Dockerfile', '**/.*ignore', '.github/**'], last: true },
+    { name: 'Docs, config & CI', include: ['**/*.{md,mdx,rst}', '**/*.{yml,yaml,toml}', '**/package.json', '**/tsconfig*.json', '**/Dockerfile', '**/.*ignore', '**/.{npmrc,nvmrc,editorconfig}', '.github/**'], last: true },
     { name: 'Tests', include: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**', '**/test/**', '**/tests/**', '**/e2e/**'], collapsed: true, last: true },
     { name: 'Code', rest: true },
   ],
