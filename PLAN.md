@@ -3,7 +3,7 @@
 A diff viewer for reviewing large TypeScript/JavaScript changes (often agent-written) by hand, for the parts
 where agentic review is not enough: security, correctness, API design.
 
-Status (2026-11-03): local proof of concept works. See "PoC: what exists" below.
+Status (2026-11-03): local proof of concept works, including GitHub-style PR/branch URLs over local repos.
 
 ## The problem
 
@@ -126,6 +126,17 @@ Known limits (deliberate, see `ponytail:` comments):
 - Find references from the panel ("who calls this changed function?"), with call sites outside the diff.
 - Move/rename detection between symbols (same hash, different path).
 - Svelte/Vue via their language tools (svelte2tsx) if the team needs it.
+
+## Done: GitHub-style URLs over local repos (2026-11-03)
+
+Instead of cloning, the server maps URLs onto repos already under `~/Projects`, where `node_modules` and
+`typescript` are installed: `/<repo>/pull/<n>`, `/<repo>/<branch>`, `/<repo>/`. Each page load fetches the PR or
+branch and its base from origin (`refs/semreview/pull/<n>` for PRs; the PR's base via `gh pr view`). Reviews are
+keyed by repo + exact commits (a new push is a new review), the last 3 are kept in memory. Only `localhost`
+Host headers are answered (DNS rebinding), and URL paths cannot leave the projects dir.
+
+Limits: dependency types come from whatever is installed in the checkout (if the PR bumps a package, hover shows
+the old one); repos not under `~/Projects` are not served.
 
 ## Toward the team version: change the URL, get the view
 

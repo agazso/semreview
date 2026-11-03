@@ -109,6 +109,10 @@ body.mod .r code span:hover { text-decoration: underline; cursor: pointer; }
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const CONTEXT = 3;
+// API lives under the page's own path: /snaha/swarm-id/pull/914/-/api/review
+const API = location.pathname.replace(/\/+$/, '') + '/-/api/';
+const BASE = new URLSearchParams(location.search).get('base');
+const api = (ep, q = '') => fetch(`${API}${ep}?${q}${BASE ? `&base=${encodeURIComponent(BASE)}` : ''}`);
 let R, tab = 'symbols';
 const store = { // per-viewer "reviewed" marks; the page works without storage
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -233,11 +237,19 @@ function rerender(fi) {
 // ---------- page ----------
 async function load() {
   const keep = $('#main').scrollTop;
-  R = await (await fetch('api/review')).json();
+  $('#info').textContent = 'fetching and diffing…';
+  const res = await api('review');
+  R = await res.json();
+  if (!res.ok) {
+    const prs = (R.prs ?? []).map((p) => `<li><a href="${location.pathname.replace(/\d+\/?$/, p.number)}">#${p.number}</a> ${esc(p.title)} <span class="stat">${esc(p.state.toLowerCase())}</span></li>`).join('');
+    $('#info').textContent = '';
+    $('#files').innerHTML = `<div class="note">${esc(R.error)}${prs ? `<p>Pull requests mentioning it:</p><ul>${prs}</ul>` : ''}</div>`;
+    return;
+  }
   R.files.forEach((f) => { if (!f.hidden && !f.binary && (f.old || f.new)) build(f); });
   const add = R.files.reduce((a, f) => a + (f.add ?? 0), 0), del = R.files.reduce((a, f) => a + (f.del ?? 0), 0);
   $('#info').textContent = `${R.repo} · ${R.base} (${R.mergeBase}) → ${R.head} · ${R.files.length} files +${add} −${del}` +
-    (R.semantics ? ` · TS ${R.tsVersion}` : ' · no typescript package found: plain diff');
+    (R.semantics ? ` · TS ${R.tsVersion}` : ' · no typescript package found: plain diff') + R.warnings.map((w) => ` · ⚠ ${w}`).join('');
   document.title = `semreview · ${R.repo}`;
   let html = '', g = -1;
   R.files.forEach((f, fi) => {
@@ -316,7 +328,7 @@ document.addEventListener('mousemove', (e) => {
   $('#tip').hidden = true;
   if (!w) return;
   hoverTimer = setTimeout(async () => {
-    if (!hoverCache.has(key)) hoverCache.set(key, fetch('api/hover?' + key).then((r) => r.json()).catch(() => null));
+    if (!hoverCache.has(key)) hoverCache.set(key, api('hover', key).then((r) => r.json()).catch(() => null));
     const h = await hoverCache.get(key);
     if (hoverKey !== key || !h?.sig) return;
     const tip = $('#tip');
@@ -339,7 +351,7 @@ const peek = { stack: [] };
 const fileCache = new Map();
 async function showPeek(side, path, line) {
   const k = `${side}:${path}`;
-  if (!fileCache.has(k)) fileCache.set(k, fetch(`api/file?side=${side}&path=${encodeURIComponent(path)}`).then((r) => (r.ok ? r.json() : null)));
+  if (!fileCache.has(k)) fileCache.set(k, api('file', `side=${side}&path=${encodeURIComponent(path)}`).then((r) => (r.ok ? r.json() : null)));
   const sd = prep(await fileCache.get(k));
   if (!sd) return;
   const from = Math.max(1, line - 150), to = Math.min(sd.lines.length, line + 350); // ponytail: a window, lib.dom.d.ts has 40k lines
@@ -356,7 +368,7 @@ async function showPeek(side, path, line) {
   if (hl) el.scrollTop = hl.offsetTop - el.clientHeight / 3;
 }
 async function definition(w) {
-  const defs = await (await fetch('api/def?' + qs(w))).json();
+  const defs = await (await api('def', qs(w))).json();
   if (!defs?.length) return;
   const d = defs[0]; // ponytail: first of several (overloads, declaration merging); add a picker when it bites
   peek.stack.push({ side: w.side, path: d.path, line: d.line });
@@ -416,7 +428,7 @@ $('#apiBtn').onclick = async () => {
   const el = $('#api');
   el.hidden = false;
   el.innerHTML = '<h3>Exported API changes</h3><div class="note">building base and head programs…</div>';
-  const list = await (await fetch('api/apidiff')).json();
+  const list = await (await api('apidiff')).json();
   const sign = { added: '+', removed: '−', changed: '~' };
   el.innerHTML = '<h3>Exported API changes</h3>' + (!list?.length ? '<div class="note">No exported signature changed.</div>' :
     list.map((a) => `<div class="apie"><span class="badge b-${a.change === 'changed' ? 'modified' : a.change}">${sign[a.change]}</span>

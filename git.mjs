@@ -3,8 +3,46 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const git = (cwd, args) =>
-  execFileSync('git', ['-c', 'core.quotepath=off', ...args], { cwd, encoding: 'utf8', maxBuffer: 1 << 30 });
+export const git = (cwd, args, opts) =>
+  execFileSync('git', ['-c', 'core.quotepath=off', ...args], { cwd, encoding: 'utf8', maxBuffer: 1 << 30, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+// null instead of throwing: for probes (does this ref exist? did the fetch work?)
+export const tryGit = (cwd, args, opts) => { try { return git(cwd, args, { timeout: 60_000, ...opts }).trim(); } catch { return null; } };
+
+const isRepo = (dir) => fs.existsSync(path.join(dir, '.git'));
+
+// URL segments -> the repo they name under projectsDir, matched case-insensitively (GitHub URLs are lowercase,
+// folders may not be). Returns the remaining segments too. Never resolves outside projectsDir.
+export function findRepo(projectsDir, segments) {
+  let dir = projectsDir;
+  for (let i = 0; i < Math.min(segments.length, 4); i++) {
+    const seg = segments[i];
+    if (!seg || seg.startsWith('.')) return null;
+    let names;
+    try { names = fs.readdirSync(dir); } catch { return null; }
+    const name = names.find((n) => n === seg) ?? names.find((n) => n.toLowerCase() === seg.toLowerCase());
+    if (!name) return null;
+    dir = path.join(dir, name);
+    if (!fs.statSync(dir).isDirectory()) return null;
+    if (isRepo(dir)) {
+      if (!fs.realpathSync(dir).startsWith(fs.realpathSync(projectsDir) + path.sep)) return null; // symlink out
+      return { root: dir, name: path.relative(projectsDir, dir), rest: segments.slice(i + 1) };
+    }
+  }
+  return null;
+}
+
+export function listRepos(projectsDir, depth = 2, rel = '') {
+  const out = [];
+  let entries = [];
+  try { entries = fs.readdirSync(path.join(projectsDir, rel), { withFileTypes: true }); } catch {}
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (isRepo(path.join(projectsDir, r))) out.push(r);
+    else if (depth > 1) out.push(...listRepos(projectsDir, depth - 1, r));
+  }
+  return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
 
 const z = (s) => s.split('\0').filter(Boolean);
 
