@@ -297,7 +297,7 @@ function renderSide() {
       return;
     }
     html += `<div class="sf${done}" data-file="${fi}" title="${esc(f.path)}">${esc(f.path)}</div>`;
-    if (!f.ts) return;
+    if (!f.ts && !f.new?.syms.length && !f.old?.syms.length) return; // JSON has key symbols too
     for (const c of f.changed ?? []) {
       const b = { added: '+', removed: '−', modified: '~', format: '≈' }[c.status];
       html += `<div class="sy" data-file="${fi}" data-row="${c.row}" title="${c.status}${c.status === 'format' ? ': whitespace/comments only' : ''}"><span class="badge b-${c.status}">${b}</span>${esc(c.path)}</div>`;

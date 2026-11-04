@@ -267,3 +267,39 @@ export class Projects {
     return out;
   }
 }
+
+// JSON (package.json, tsconfig with comments): highlighting + a symbol per key holding an object or array,
+// so the breadcrumb reads `dependencies` or `compilerOptions › paths`.
+export function jsonData(ts, fileName, text) {
+  const sf = ts.parseJsonText(fileName, text);
+  const cls = [], syms = [];
+  const line = (pos) => sf.getLineAndCharacterOfPosition(pos).line + 1;
+  const span = (n, kind) => { const s = n.getStart(sf); cls.push(s, n.end - s, kind); };
+  const K = ts.SyntaxKind, C = ts.ClassificationType;
+  const walk = (n, parent) => {
+    if (ts.isPropertyAssignment(n)) {
+      span(n.name, C.jsxAttribute); // keys get the attribute color, values the string color
+      const v = n.initializer;
+      if (ts.isObjectLiteralExpression(v) || ts.isArrayLiteralExpression(v)) {
+        const name = ts.isStringLiteral(n.name) ? n.name.text : n.name.getText(sf);
+        const p = parent ? `${parent} › ${name}` : name;
+        const s = line(n.getStart(sf));
+        // ponytail: whitespace-stripped text as the hash; a space inside a string value counts as formatting
+        syms.push({ path: p, kind: 'key', start: s, decl: s, end: line(n.end), hash: crypto.createHash('sha1').update(n.getText(sf).replace(/\s+/g, '')).digest('hex').slice(0, 12) });
+        return walk(v, p);
+      }
+      return walk(v, parent);
+    }
+    if (n.kind === K.StringLiteral) span(n, C.stringLiteral);
+    else if (n.kind === K.NumericLiteral) span(n, C.numericLiteral);
+    else if (n.kind === K.TrueKeyword || n.kind === K.FalseKeyword || n.kind === K.NullKeyword) span(n, C.keyword);
+    else ts.forEachChild(n, (c) => walk(c, parent));
+  };
+  walk(sf.statements[0]?.expression ?? sf, '');
+  // comments: the scanner sees them, the tree does not
+  const scan = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, text);
+  for (let t = scan.scan(); t !== K.EndOfFileToken; t = scan.scan()) {
+    if (t === K.SingleLineCommentTrivia || t === K.MultiLineCommentTrivia) cls.push(scan.getTokenStart?.() ?? scan.getTokenPos(), scan.getTextPos() - (scan.getTokenStart?.() ?? scan.getTokenPos()), C.comment);
+  }
+  return { cls, syms };
+}

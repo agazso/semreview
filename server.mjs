@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { git, tryGit, Side, defaultBase, listChanges, findRepo, listRepos } from './git.mjs';
-import { loadTs, makeClassifier, symbols, Projects, TS_EXT } from './ts.mjs';
+import { loadTs, makeClassifier, symbols, jsonData, Projects, TS_EXT } from './ts.mjs';
 
 const argv = process.argv.slice(2);
 const opt = (name, def) => { const i = argv.indexOf(`--${name}`); return i < 0 ? def : argv.splice(i, 2)[1]; };
@@ -128,6 +128,7 @@ class Review {
   sideData(side, rel, isTs) {
     const text = side.read(rel);
     if (text === undefined || text.includes('\0') || text.length > MAX_TEXT) return null;
+    if (this.ts && /\.jsonc?$/.test(rel)) return { text, ...jsonData(this.ts, rel, text) };
     return { text, cls: isTs ? this.classify(rel, text) : [], syms: isTs ? symbols(this.ts, rel, text) : [] };
   }
 

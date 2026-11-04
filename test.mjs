@@ -51,6 +51,7 @@ write('src/user.ts', fs.readFileSync(path.join(repo, 'src/user.ts'), 'utf8')
   .replace('remove(id: string) { return id; }', 'remove(id: string) {\n    return id;\n  }')
   .replace("makeId(): string { return 'x'; }", "makeId(prefix: string): string { return prefix + 'x'; }"));
 write('src/user.test.ts', "import { makeId } from './user';\ndescribe('makeId', () => {\n  it('prefixes', () => { makeId('a'); });\n});\n");
+write('package.json', '{\n  "name": "p",\n  "dependencies": {\n    "a": "1"\n  }\n}\n');
 
 const port = 47000 + Math.floor(Math.random() * 1000);
 const server = spawn(process.execPath, [path.join(import.meta.dirname, 'server.mjs'), 'main', '--port', String(port), '--projects', projects], { cwd: repo, stdio: ['ignore', 'pipe', 'inherit'] });
@@ -59,8 +60,10 @@ const get = async (p) => (await fetch(`http://127.0.0.1:${port}${p}`)).json();
 
 try {
   const r = await get('/-/api/review');
-  assert.deepEqual(r.files.map((f) => f.path), ['src/user.ts', 'src/user.test.ts'], 'code first, tests last');
-  const [code, test] = r.files;
+  assert.deepEqual(r.files.map((f) => f.path), ['package.json', 'src/user.ts', 'src/user.test.ts'], 'config first, code, tests last');
+  const [pkg, code, test] = r.files;
+  assert.deepEqual(pkg.new.syms.map((s) => [s.path, s.start, s.end]), [['dependencies', 3, 5]], 'json key symbols');
+  assert.ok(pkg.new.cls.includes(22) && pkg.new.cls.includes(6), 'json key + string colors');
   assert.equal(test.testFor, 'src/user.ts');
   assert.equal(r.groups[test.group].collapsed, true);
   const sym = (side, p) => side.syms.find((s) => s.path === p);
@@ -94,7 +97,7 @@ try {
   // ---- routes into ~/Projects (here: <tmp>/projects) ----
   const wt = await get('/org/proj/-/api/review'); // case-insensitive, like a github.com path
   assert.equal(wt.repo, 'Org/Proj');
-  assert.deepEqual(wt.files.map((f) => f.path), ['src/user.ts', 'src/user.test.ts']);
+  assert.deepEqual(wt.files.map((f) => f.path), ['package.json', 'src/user.ts', 'src/user.test.ts']);
 
   const br = await get('/org/proj/feat/x/-/api/review'); // fetched from origin, branch with a slash
   assert.match(br.head, /^feat\/x \(origin\) [0-9a-f]{10}$/);
