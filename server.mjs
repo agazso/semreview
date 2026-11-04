@@ -24,10 +24,12 @@ const headArg = opt('head', null);
 const cwdRoot = tryGit(process.cwd(), ['rev-parse', '--show-toplevel']);
 
 const DEFAULT_CONFIG = {
-  // Display order. A file goes to the first group whose globs match; `rest` takes everything else.
+  // A file goes to the first group whose globs match; `rest` takes everything else. Display order is the array
+  // order, except `first` groups go on top and `last` groups at the end.
   groups: [
     { name: 'API surface & types', include: ['**/*.d.ts', '**/types.ts', '**/types/**', '**/index.ts', '**/*.graphql', '**/openapi*.{json,yaml,yml}', '**/*.proto'] },
-    { name: 'Docs, config & CI', include: ['**/*.{md,mdx,rst}', '**/*.{yml,yaml,toml}', '**/package.json', '**/tsconfig*.json', '**/Dockerfile', '**/.*ignore', '**/.{npmrc,nvmrc,editorconfig}', '.github/**'], last: true },
+    { name: 'Config & CI', include: ['**/*.{yml,yaml,toml}', '**/package.json', '**/tsconfig*.json', '**/Dockerfile', '**/.*ignore', '**/.{npmrc,nvmrc,editorconfig}', '.github/**'], first: true },
+    { name: 'Docs', include: ['**/*.{md,mdx,rst}'], last: true },
     { name: 'Tests', include: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**', '**/test/**', '**/tests/**', '**/e2e/**'], collapsed: true, last: true },
     { name: 'Code', rest: true },
   ],
@@ -146,7 +148,7 @@ class Review {
     let config = DEFAULT_CONFIG;
     try { const t = sides.new.read('.semreview.json'); if (t) config = { ...DEFAULT_CONFIG, ...JSON.parse(t) }; } catch {}
     const groups = config.groups;
-    const order = groups.map((g, i) => [g.last ? 1 : 0, i]); // `last` groups match early but display at the end
+    const order = groups.map((g, i) => [g.first ? -1 : g.last ? 1 : 0, i]); // match in array order, display `first` groups on top and `last` ones at the end
     const rest = groups.findIndex((g) => g.rest);
 
     const files = changes.map((c) => {

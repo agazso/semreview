@@ -87,7 +87,7 @@ Features, in the order they pay off:
    Each hunk gets a sticky breadcrumb (`UserService › createUser`) plus the declaration line when it is scrolled
    out of view, and a "show whole function" button. The sidebar lists **changed symbols** (+ added, − removed,
    ~ modified, ≈ formatting only) instead of files.
-2. **Review order.** Glob groups from `.semreview.json` (defaults: API surface & types → code → docs/config →
+2. **Review order.** Glob groups from `.semreview.json` (defaults: config & CI → API surface & types → code → docs →
    tests, collapsed; lockfiles/snapshots/dist hidden). Test files are paired with their code file (same stem, or
    same basename across `src/` and `tests/`) and linked both ways.
 3. **Hover and Ctrl/⌘-click** on both sides of the diff; definitions open in a side panel in the same page,
