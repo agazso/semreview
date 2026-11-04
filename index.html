@@ -29,7 +29,9 @@ code, pre, .mono { font: 12.5px/20px ui-monospace, SFMono-Regular, Menlo, Consol
 #top .title { font-weight: 600; }
 #top .grow { flex: 1; }
 #layout { display: flex; height: calc(100% - 44px); }
-#side { width: 300px; flex: none; overflow: auto; border-right: 1px solid var(--line); padding: 8px 0; }
+#side { width: 300px; min-width: 150px; max-width: 70vw; flex: none; overflow: auto; padding: 8px 0; }
+#split { width: 5px; margin: 0 -2px; flex: none; cursor: col-resize; z-index: 1; background: linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat; }
+#split:hover, #split.drag { background-size: 3px 100%; }
 #main { flex: 1; overflow: auto; min-width: 0; }
 #peek { width: 45%; flex: none; overflow: auto; border-left: 1px solid var(--line); }
 #peek[hidden] { display: none; }
@@ -84,7 +86,7 @@ body.mod .r code span:hover { text-decoration: underline; cursor: pointer; }
 .apie pre { margin: 4px 0 0; padding: 4px 8px; white-space: pre-wrap; border-radius: 4px; }
 .apie .b { background: var(--del); } .apie .a { background: var(--add); }
 .hiddenlist { margin: 8px 16px 32px; color: var(--muted); font-size: 13px; }
-@media (max-width: 800px) { #side { display: none; } #peek { position: fixed; inset: 44px 0 0 0; width: auto; background: var(--bg); z-index: 5; } }
+@media (max-width: 800px) { #side, #split { display: none; } #peek { position: fixed; inset: 44px 0 0 0; width: auto; background: var(--bg); z-index: 5; } }
 </style>
 </head>
 <body>
@@ -101,6 +103,7 @@ body.mod .r code span:hover { text-decoration: underline; cursor: pointer; }
     <div class="tabs"><button data-tab="symbols" aria-pressed="true">Symbols</button><button data-tab="files" aria-pressed="false">Files</button></div>
     <div id="sideBody"></div>
   </nav>
+  <div id="split" title="Drag to resize, double-click to reset"></div>
   <main id="main"><section id="api" hidden></section><div id="files"></div></main>
   <aside id="peek" hidden></aside>
 </div>
@@ -300,7 +303,7 @@ function renderSide() {
     if (!f.ts && !f.new?.syms.length && !f.old?.syms.length) return; // JSON has key symbols too
     for (const c of f.changed ?? []) {
       const b = { added: '+', removed: '−', modified: '~', format: '≈' }[c.status];
-      html += `<div class="sy" data-file="${fi}" data-row="${c.row}" title="${c.status}${c.status === 'format' ? ': whitespace/comments only' : ''}"><span class="badge b-${c.status}">${b}</span>${esc(c.path)}</div>`;
+      html += `<div class="sy" data-file="${fi}" data-row="${c.row}" title="${esc(c.path)}${c.status === 'format' ? ' (whitespace/comments only)' : ''}"><span class="badge b-${c.status}">${b}</span>${esc(c.path)}</div>`;
     }
   });
   $('#sideBody').innerHTML = html;
@@ -457,6 +460,25 @@ $('#apiBtn').onclick = async () => {
       <b class="mono">${esc(a.name)}</b> <span class="stat">${esc(a.kind)} · ${esc(a.path)}</span>
       ${a.before !== undefined ? `<pre class="b">${esc(a.before)}</pre>` : ''}${a.after !== undefined ? `<pre class="a">${esc(a.after)}</pre>` : ''}</div>`).join(''));
 };
+// sidebar width: drag the separator; remembered per viewer
+const side = $('#side'), split = $('#split');
+const setW = (w) => { side.style.width = w ? `${w}px` : ''; store.set('semreview:sideW', w ? String(w) : null); };
+if (store.get('semreview:sideW')) side.style.width = `${store.get('semreview:sideW')}px`;
+split.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  split.setPointerCapture(e.pointerId);
+  split.classList.add('drag');
+  const x0 = e.clientX, w0 = side.offsetWidth;
+  const move = (m) => { side.style.width = `${w0 + m.clientX - x0}px`; };
+  split.addEventListener('pointermove', move);
+  split.addEventListener('pointerup', () => {
+    split.removeEventListener('pointermove', move);
+    split.classList.remove('drag');
+    setW(side.offsetWidth); // offsetWidth respects the min/max clamps
+  }, { once: true });
+});
+split.addEventListener('dblclick', () => setW(null));
+
 load();
 </script>
 </body>
