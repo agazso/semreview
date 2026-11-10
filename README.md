@@ -23,7 +23,7 @@ for the branch or PR and its base, so you see what GitHub shows; PR heads are st
 `refs/semreview/pull/<n>` (remove all with `git for-each-ref --format='%(refname)' refs/semreview | xargs -n1 git update-ref -d`).
 The PR's base branch comes from `gh pr view`; without `gh` it falls back to the default branch.
 
-Options: `--port 4747`, `--projects <dir>`; started inside a repo, `[base] [--head <ref>]` set what `/` shows.
+Options: `--port 4747`, `--projects <dir>` (or `SEMREVIEW_PROJECTS=<dir>`); started inside a repo, `[base] [--head <ref>]` set what `/` shows.
 Semantics use each repo's own `typescript` package (no install for semreview itself; Node ≥ 22). An optional
 `.semreview.json` in a repo overrides groups and hidden files (see `DEFAULT_CONFIG` in `server.mjs`).
 
